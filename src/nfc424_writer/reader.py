@@ -45,6 +45,7 @@ class Reader:
         self.timeout = timeout
         self.connection = None
         self.reader_name: str | None = None
+        self._reader = None  # smartcard.System.readers() entry selezionato
 
     def list_readers(self) -> list[str]:
         """Ritorna i nomi di tutti i lettori collegati."""
@@ -74,15 +75,22 @@ class Reader:
         else:
             selected = rlist[0]
         self.reader_name = str(selected)
+        self._reader = selected
 
     def wait_for_tag(self) -> TagInfo:
         """Attende un tag sul reader (fino a `self.timeout` secondi)."""
-        if self.reader_name is None:
+        if self.reader_name is None or self._reader is None:
             self.connect()
         cardtype = AnyCardType()
         try:
+            # IMPORTANTE: passiamo solo il reader selezionato, non tutti.
+            # ACR1552U espone 2 endpoint PCSC: PICC (per i tag) e SAM (per
+            # un eventuale modulo SAM). Il SAM appare sempre come "card
+            # presente" ma non è un tag NFC vero — se passiamo entrambi,
+            # CardRequest matcha il SAM per primo e poi connect() fallisce
+            # con NoCardException.
             cardrequest = CardRequest(
-                timeout=self.timeout, cardType=cardtype, readers=readers()
+                timeout=self.timeout, cardType=cardtype, readers=[self._reader]
             )
             cardservice = cardrequest.waitforcard()
         except CardRequestTimeoutException as e:
