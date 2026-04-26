@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dati sensibili: CSV export dal portale contengono AppKey2 in chiaro.
+# Non committare mai — usa path assoluti sulla macchina di lavoro o
+# conserva in una directory fuori dal repo.
+tags-batch-*.csv
+*.key
+.env
+.env.local

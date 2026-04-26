@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nfc424-writer"
+version = "0.1.0"
+description = "CLI per programmare tag NTAG 424 DNA con SDM/SUN via lettore ACR1552U (ShopRFID / Authentia)"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "ShopRFID" }]
+license = { text = "Proprietary" }
+dependencies = [
+    "pyscard>=2.2.0",        # accesso PCSC (smart card / NFC) cross-platform
+    "cryptography>=42.0.0",  # AES-CBC, AES-ECB, CMAC
+    "typer>=0.12.0",         # CLI
+    "rich>=13.7.0",          # output colorato / tabelle
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.4.0",
+]
+
+[project.scripts]
+nfc424-writer = "nfc424_writer.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
