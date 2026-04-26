@@ -7,7 +7,7 @@ name = "nfc424-writer"
 version = "0.1.0"
 description = "CLI per programmare tag NTAG 424 DNA con SDM/SUN via lettore ACR1552U (ShopRFID / Authentia)"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.9"
 authors = [{ name = "ShopRFID" }]
 license = { text = "Proprietary" }
 dependencies = [
@@ -36,4 +36,4 @@ pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py39"
