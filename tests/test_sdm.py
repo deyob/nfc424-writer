@@ -78,3 +78,13 @@ def test_sdm_offset_encoding_little_endian():
     # Offset PICCData a byte 6..8 del payload (dopo 4 byte header + 2 SDMAR)
     off_from_payload = int.from_bytes(payload[6:9], "little")
     assert off_from_payload == mirrors.picc_data_offset
+
+
+def test_sdm_access_rights_use_app_key_2():
+    """PICCData (MetaRead) e SDMMAC (FileRead) devono usare AppKey2, la
+    secret_key del CSV con cui il backend verifica il tocco."""
+    _, mirrors = build_ndef_for_url(URL_TEMPLATE)
+    payload = build_sdm_file_settings(mirrors)
+    sdm_ar = int.from_bytes(payload[4:6], "little")
+    assert (sdm_ar >> 4) & 0xF == 2  # SDMMetaRead
+    assert sdm_ar & 0xF == 2  # SDMFileRead

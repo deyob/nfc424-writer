@@ -165,20 +165,22 @@ def build_sdm_file_settings(mirrors: SdmMirrors) -> bytes:
                                    (0xC1 = bit7=1 Encoding ASCII,
                                     bit6=1 SDMEnabled, bit0=1 ReadCtr enabled
                                     in PICCData encryption)
-      - SDMAccessRights = 0xF121 :
-          nibble bassi (0x21)    : FileRead key=2, CtrRet key=1
-          nibble alti  (0xF1)    : MetaRead=F(plain),
-                                   (MetaRead=0xE significa "ANY key" per
-                                    calcolo PICCData cryptogram)
-        NOTE: 0xF121 è un esempio; in produzione verificare
-        secondo AN12196 Table 22.
+      - SDMAccessRights = 0xF122 (nibble dal più alto: RFU, SDMCtrRet,
+        SDMMetaRead, SDMFileRead — AN12196 / datasheet NT4H2421Gx):
+          RFU=F, SDMCtrRet=1,
+          SDMMetaRead=2 : PICCData cifrato con AppKey2
+          SDMFileRead=2 : SDMMAC calcolato con AppKey2
+        Entrambi su AppKey2 = la secret_key del CSV, l'unica che il
+        backend conosce (verifySun usa la stessa chiave per decifrare
+        PICCData e verificare il CMAC). Con FileRead=1 il chip firmerebbe
+        con AppKey1, che resta quella di fabbrica: CMAC sempre invalido.
 
     Mirrors offset sono codificati little-endian a 3 byte ciascuno.
     """
     file_option = 0x40
     access_rights = bytes([0xE0, 0xEE])
     sdm_options = 0xC1
-    sdm_access_rights = bytes([0x21, 0xF1])  # little-endian di 0xF121
+    sdm_access_rights = bytes([0x22, 0xF1])  # little-endian di 0xF122
 
     def _off3(n: int) -> bytes:
         return int(n).to_bytes(3, "little")
