@@ -85,6 +85,7 @@ def test_sdm_access_rights_use_app_key_2():
     secret_key del CSV con cui il backend verifica il tocco."""
     _, mirrors = build_ndef_for_url(URL_TEMPLATE)
     payload = build_sdm_file_settings(mirrors)
-    sdm_ar = int.from_bytes(payload[4:6], "little")
-    assert (sdm_ar >> 4) & 0xF == 2  # SDMMetaRead
-    assert sdm_ar & 0xF == 2  # SDMFileRead
+    rfu_ctr, meta_file = payload[4], payload[5]
+    assert rfu_ctr >> 4 == 0xF  # RFU
+    assert meta_file >> 4 == 2  # SDMMetaRead
+    assert meta_file & 0xF == 2  # SDMFileRead

@@ -180,7 +180,10 @@ def build_sdm_file_settings(mirrors: SdmMirrors) -> bytes:
     file_option = 0x40
     access_rights = bytes([0xE0, 0xEE])
     sdm_options = 0xC1
-    sdm_access_rights = bytes([0x22, 0xF1])  # little-endian di 0xF122
+    # Ordine dei byte come negli esempi NXP ("C1 F1 21 ..."): prima
+    # RFU|SDMCtrRet, poi SDMMetaRead|SDMFileRead. Invertiti il chip legge
+    # RFU != F e risponde 919E (PARAMETER_ERROR).
+    sdm_access_rights = bytes([0xF1, 0x22])
 
     def _off3(n: int) -> bytes:
         return int(n).to_bytes(3, "little")
