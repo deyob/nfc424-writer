@@ -102,8 +102,8 @@ class AuthSession:
     key_no: int = 0
 
     def next_iv_for_cmd(self, cmd_ins: int) -> bytes:
-        """IV per cifratura dati di un comando autenticato:
-        IV = AES-ECB(K_SesAuthENC, 0xA55A || TI || CmdCtr || 0x0000)
+        """IV per cifratura dati di un comando autenticato (AN12196):
+        IV = AES-ECB(K_SesAuthENC, 0xA55A || TI || CmdCtr || 0x00 * 8)
         """
         from .crypto import aes_ecb_encrypt
 
@@ -111,19 +111,19 @@ class AuthSession:
             bytes([0xA5, 0x5A])
             + self.ti
             + self.cmd_counter.to_bytes(2, "little")
-            + b"\x00\x00"
+            + bytes(8)
         )
         assert len(plain) == 16
         return aes_ecb_encrypt(self.k_enc, plain)
 
     def mac_input(self, cmd_ins: int, header: bytes, data: bytes) -> bytes:
-        """Input per calcolo CMAC di un comando:
-        CmdCtr || TI || Cmd || CmdHeader || CmdData
+        """Input per calcolo CMAC di un comando (AN12196):
+        Cmd || CmdCtr || TI || CmdHeader || CmdData
         """
         return (
-            self.cmd_counter.to_bytes(2, "little")
+            bytes([cmd_ins])
+            + self.cmd_counter.to_bytes(2, "little")
             + self.ti
-            + bytes([cmd_ins])
             + header
             + data
         )
@@ -226,14 +226,15 @@ class Ntag424:
         if len(e_rnd_b) != 16:
             raise NtagError(f"E(RndB) lunghezza inattesa: {len(e_rnd_b)}")
 
-        # Step 3: decrypt RndB (IV=0), genero RndA, preparo
-        # E(RndA || rotl(RndB)), IV = E(RndB).
+        # Step 3: decrypt RndB, genero RndA, preparo E(RndA || rotl(RndB)).
+        # In EV2 tutti i messaggi dell'autenticazione usano IV = 0 (AN12196),
+        # non il concatenamento DESFire EV1.
         iv0 = bytes(16)
         rnd_b = aes_cbc_decrypt(key, iv0, e_rnd_b)
         rnd_a = secrets.token_bytes(16)
         rnd_b_rot = rotate_left(rnd_b, 1)
         plain = rnd_a + rnd_b_rot
-        e_payload = aes_cbc_encrypt(key, e_rnd_b, plain)
+        e_payload = aes_cbc_encrypt(key, iv0, plain)
 
         # Step 4: invio Additional Frame con il payload. Risposta: E(TI ||
         # rotl(RndA) || PDcap2 || PCDcap2) = 32 byte, poi 9100.
@@ -241,9 +242,7 @@ class Ntag424:
         if len(resp2) != 32:
             raise NtagError(f"AuthEV2First step2: lunghezza risposta {len(resp2)}")
 
-        # IV per decrypt = ultimi 16 byte del payload cifrato appena inviato
-        iv2 = e_payload[-16:]
-        plain2 = aes_cbc_decrypt(key, iv2, resp2)
+        plain2 = aes_cbc_decrypt(key, iv0, resp2)
         ti = plain2[0:4]
         rnd_a_rot_recv = plain2[4:20]
         # pd_cap2 = plain2[20:26]  # 6 byte
@@ -322,7 +321,7 @@ class Ntag424:
 
         Se target == current auth key: payload = NewKey(16) || KeyVer(1)
         Se target != current auth key: payload = (NewKey XOR OldKey)(16) ||
-                                        CRC32(NewKey)(4) || KeyVer(1)
+                                        KeyVer(1) || CRC32(NewKey)(4)
         """
         if self.session is None:
             raise NtagError("Auth richiesta per ChangeKey")
@@ -337,7 +336,7 @@ class Ntag424:
         else:
             xored = bytes(a ^ b for a, b in zip(new_key, old_key))
             crc = _crc32_nxp(new_key)
-            plain = xored + crc + bytes([key_version])
+            plain = xored + bytes([key_version]) + crc
 
         self._apdu_full(INS_CHANGE_KEY, header=header, plain_data=plain)
 
