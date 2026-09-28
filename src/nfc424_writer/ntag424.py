@@ -144,11 +144,18 @@ class Ntag424:
     # ---- APDU helpers ------------------------------------------------------
 
     def _native_apdu(self, ins: int, data: bytes = b"", le: int = 0x00) -> bytes:
-        """Comando nativo NTAG (DESFire style) wrappato in ISO 7816:
-        CLA=0x90 INS=ins P1=00 P2=00 Lc=len(data) <data> Le
-        Le=0x00 significa "qualsiasi lunghezza" in ISO 7816 short.
+        """Comando nativo NTAG (DESFire style) wrappato in ISO 7816.
+
+        Case 2 short (no data):  CLA INS P1 P2 Le        → 5 byte
+        Case 4 short (con data): CLA INS P1 P2 Lc <data> Le → 6+ byte
+
+        Mandare 6 byte con Lc=0 (`90 INS 00 00 00 00`) viene rifiutato
+        dal chip su alcuni stack PCSC (errore SCARD_E_NOT_TRANSACTED).
         """
-        apdu = bytes([0x90, ins, 0x00, 0x00, len(data)]) + data + bytes([le])
+        if len(data) == 0:
+            apdu = bytes([0x90, ins, 0x00, 0x00, le])
+        else:
+            apdu = bytes([0x90, ins, 0x00, 0x00, len(data)]) + data + bytes([le])
         resp, sw1, sw2 = self.reader.transmit(apdu)
         # NTAG risponde SW=91XX per comandi nativi (91 00 = ok).
         # Se SW=9000 il reader/driver ha già mappato → anche accettabile.

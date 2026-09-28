@@ -12,6 +12,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
+from smartcard.CardConnection import CardConnection
 from smartcard.CardMonitoring import CardMonitor, CardObserver
 from smartcard.CardRequest import CardRequest
 from smartcard.CardType import AnyCardType
@@ -46,6 +47,7 @@ class Reader:
         self.connection = None
         self.reader_name: str | None = None
         self._reader = None  # smartcard.System.readers() entry selezionato
+        self._cardservice = None  # tienilo vivo, altrimenti GC chiude hcard
 
     def list_readers(self) -> list[str]:
         """Ritorna i nomi di tutti i lettori collegati."""
@@ -78,26 +80,35 @@ class Reader:
         self._reader = selected
 
     def wait_for_tag(self) -> TagInfo:
-        """Attende un tag sul reader (fino a `self.timeout` secondi)."""
+        """Attende un tag sul reader (fino a `self.timeout` secondi).
+
+        NB: bypassiamo `CardRequest.waitforcard()` perché su macOS lascia uno
+        stato transactional incoerente (SCARD_E_NOT_TRANSACTED 0x80100016
+        dopo 1-2 APDU). Facciamo polling manuale provando `connect()` finché
+        un tag non appare.
+        """
         if self.reader_name is None or self._reader is None:
             self.connect()
-        cardtype = AnyCardType()
-        try:
-            # IMPORTANTE: passiamo solo il reader selezionato, non tutti.
-            # ACR1552U espone 2 endpoint PCSC: PICC (per i tag) e SAM (per
-            # un eventuale modulo SAM). Il SAM appare sempre come "card
-            # presente" ma non è un tag NFC vero — se passiamo entrambi,
-            # CardRequest matcha il SAM per primo e poi connect() fallisce
-            # con NoCardException.
-            cardrequest = CardRequest(
-                timeout=self.timeout, cardType=cardtype, readers=[self._reader]
-            )
-            cardservice = cardrequest.waitforcard()
-        except CardRequestTimeoutException as e:
-            raise ReaderError("Timeout: nessun tag presentato sul lettore") from e
 
-        cardservice.connection.connect()
-        self.connection = cardservice.connection
+        deadline = time.monotonic() + self.timeout
+        last_err: Exception | None = None
+        connection = None
+        while time.monotonic() < deadline:
+            connection = self._reader.createConnection()
+            try:
+                connection.connect(CardConnection.T1_protocol)
+                break  # tag presente
+            except (NoCardException, Exception) as e:
+                last_err = e
+                connection = None
+                time.sleep(0.2)
+
+        if connection is None:
+            raise ReaderError(
+                f"Timeout: nessun tag presentato sul lettore. Ultimo errore: {last_err}"
+            )
+
+        self.connection = connection
         atr = toHexString(self.connection.getATR())
 
         # Get UID via PC/SC escape: APDU FF CA 00 00 00 (Get Data, UID)
